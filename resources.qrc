@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>images/balon.png</file>
+        <file>images/balon-gray.png</file>
+        <file>images/gray.png</file>
+        <file>images/yellow.png</file>
+    </qresource>
+    <qresource prefix="/sounds">
+        <file>sounds/Brazzer.wav</file>
+    </qresource>
+</RCC>
