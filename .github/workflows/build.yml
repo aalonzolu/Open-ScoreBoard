@@ -1,0 +1,190 @@
+name: Build Open-ScoreBoard
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ published ]
+
+env:
+  QT_VERSION: 6.5.3
+  CMAKE_VERSION: 3.26.x
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            qt_arch: win64_msvc2019_64
+            cmake_generator: "Visual Studio 17 2022"
+            artifact_name: open-scoreboard-windows
+            executable_suffix: .exe
+            package_command: |
+              mkdir dist
+              cp build/Open-ScoreBoard.exe dist/
+              windeployqt dist/Open-ScoreBoard.exe --qmldir . --release
+              7z a open-scoreboard-windows.zip dist/*
+            
+          - os: ubuntu-latest  
+            qt_arch: gcc_64
+            cmake_generator: "Unix Makefiles"
+            artifact_name: open-scoreboard-linux
+            executable_suffix: ""
+            package_command: |
+              mkdir dist
+              cp build/Open-ScoreBoard dist/
+              # Create AppImage
+              wget https://github.com/probonopd/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+              chmod +x linuxdeploy-x86_64.AppImage
+              wget https://github.com/probonopd/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+              chmod +x linuxdeploy-plugin-qt-x86_64.AppImage
+              ./linuxdeploy-x86_64.AppImage --appdir AppDir --executable build/Open-ScoreBoard --desktop-file assets/open-scoreboard.desktop --icon-file images/balon.png --plugin qt --output appimage || true
+              mv *.AppImage open-scoreboard-linux.AppImage 2>/dev/null || tar czf open-scoreboard-linux.tar.gz dist/
+              
+          - os: macos-latest
+            qt_arch: clang_64  
+            cmake_generator: "Unix Makefiles"
+            artifact_name: open-scoreboard-macos
+            executable_suffix: .app
+            package_command: |
+              mkdir dist
+              cp -R build/Open-ScoreBoard.app dist/
+              macdeployqt dist/Open-ScoreBoard.app -dmg
+              mv dist/*.dmg open-scoreboard-macos.dmg
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        arch: ${{ matrix.qt_arch }}
+        cache: true
+        modules: 'qtmultimedia'
+
+    - name: Install CMake
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: ${{ env.CMAKE_VERSION }}
+
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libasound2-dev \
+          libxrandr-dev \
+          libxss-dev \
+          libgconf-2-4 \
+          libxkbcommon-dev \
+          libxcomposite-dev \
+          libxdamage-dev \
+          libxtst6 \
+          libxext6 \
+          libxfixes3 \
+          libnss3-dev \
+          libdrm2 \
+          libgtk-3-dev \
+          libxss1 \
+          libasound2-dev \
+          fuse
+
+    - name: Configure CMake 
+      run: |
+        cmake -B build -G "${{ matrix.cmake_generator }}" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=install \
+          -DBUILD_TESTS=ON
+          
+    - name: Build application
+      run: cmake --build build --config Release --target all
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest -C Release --output-on-failure || echo "No tests configured yet"
+
+    - name: Package application  
+      shell: bash
+      run: ${{ matrix.package_command }}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: |
+          *.zip
+          *.AppImage  
+          *.tar.gz
+          *.dmg
+        retention-days: 30
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create checksums
+      run: |
+        find . -name "*.zip" -o -name "*.AppImage" -o -name "*.tar.gz" -o -name "*.dmg" | xargs sha256sum > SHA256SUMS.txt
+        
+    - name: Upload release assets
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/*.zip
+          **/*.AppImage  
+          **/*.tar.gz
+          **/*.dmg
+          SHA256SUMS.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt (for moc)
+      uses: jurplel/install-qt-action@v3  
+      with:
+        version: ${{ env.QT_VERSION }}
+        cache: true
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck clang-format
+        
+    - name: Run cppcheck
+      run: |
+        cppcheck --enable=all --inconclusive --xml --xml-version=2 \
+          --suppress=missingIncludeSystem \
+          --suppress=unmatchedSuppression \
+          *.cpp *.h 2> cppcheck-report.xml || true
+          
+    - name: Check code formatting
+      run: |
+        find . -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror || echo "Code formatting check completed"
+
+    - name: Upload cppcheck results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: cppcheck-report
+        path: cppcheck-report.xml

@@ -1,13 +1,20 @@
 #include "boardw.h"
 #include "ui_boardw.h"
-#include <QDesktopWidget>
+#include <QScreen>
+#include <QGuiApplication>
 
 BoardW::BoardW(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::BoardW)
 {
     ui->setupUi(this);
-
+    
+    // Apply current theme
+    applyCurrentTheme();
+    
+    // Connect to theme changes
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged,
+            this, &BoardW::applyCurrentTheme);
 }
 
 BoardW::~BoardW()
@@ -17,9 +24,9 @@ BoardW::~BoardW()
 
 void BoardW::setLCD(int minute,int second)
 {
-ui->lcdTimerMM->display(minute);
-ui->lcdTimerSS->display(second);
-qDebug()<<"Hola desde la segunda funcion";
+    // Update timer displays on scoreboard
+    ui->lcdTimerMM->display(minute);
+    ui->lcdTimerSS->display(second);
 }
 
 void BoardW::SetPixmap(int team,QString img)
@@ -44,31 +51,35 @@ void BoardW::SetPixmap(int team,QString img)
 
 void BoardW::SHOW()
 {
-    QDesktopWidget *desktop = QApplication::desktop();
-    if ( 1==desktop->screenCount()  ) {
+    QList<QScreen*> screens = QGuiApplication::screens();
+    if (screens.count() == 1) {
         // single monitor - use built in
         showFullScreen();
     } else {
-        QRect rect = desktop->screenGeometry(1);
-        move(rect.topLeft());
-        setWindowState(Qt::WindowFullScreen);
-        this->resize( QApplication::desktop()->size() );
+        // Multi-monitor setup - show on second screen
+        if (screens.count() > 1) {
+            QRect rect = screens.at(1)->geometry();
+            move(rect.topLeft());
+            setWindowState(Qt::WindowFullScreen);
+            this->resize(rect.size());
+        } else {
+            showFullScreen();
+        }
     }
 }
 
 void BoardW::resizeEvent(QResizeEvent* event)
 {
    QMainWindow::resizeEvent(event);
-   {
-        //hokla
-       qDebug()<<"Resize 2";
-       int w = ui->LOGO1->width();
-       int h = ui->LOGO1->height();
-       QPixmap mypix0 (IMG0);
-       ui->LOGO1->setPixmap(mypix0.scaled(w,h,Qt::KeepAspectRatio));
-       QPixmap mypix1 (IMG1);
-       ui->LOGO2->setPixmap(mypix1.scaled(w,h,Qt::KeepAspectRatio));
-   }
+   
+   // Update logo scaling after resize event
+   int w = ui->LOGO1->width();
+   int h = ui->LOGO1->height();
+   
+   QPixmap mypix0 (IMG0);
+   ui->LOGO1->setPixmap(mypix0.scaled(w,h,Qt::KeepAspectRatio));
+   QPixmap mypix1 (IMG1);
+   ui->LOGO2->setPixmap(mypix1.scaled(w,h,Qt::KeepAspectRatio));
 }
 
 void BoardW::changename(QString name)
@@ -100,58 +111,50 @@ void BoardW::balonPOS(int team)
     }
 }
 void BoardW::keyPressEvent(QKeyEvent *event)
-
 {
-
-        if( event->key() == Qt::Key_A )
-        {
-            // do your stuff here
-            qDebug()<<"2: Presionaste la tecla A";
-        }
-        else if( event->key() == Qt::Key_D )
-        {
-            qDebug()<<"2: Presionaste la tecla "<<event->text();
-        }
-        else if( event->key() == Qt::Key_W )
-        {
-            qDebug()<<"2: Presionaste la tecla "<<event->text();
-
-        }
-        else if( event->key() == Qt::Key_S )
-        {
-            qDebug()<<"2: Presionaste la tecla "<<event->text();
-
-        }
-        else if( event->key() == Qt::Key_J )
-        {
-            qDebug()<<"2: Presionaste la tecla "<<event->text();
-
-        }
+    // Handle keyboard input on scoreboard
+    // Most game control happens in main window, this is for display-specific actions
+    
+    if( event->key() == Qt::Key_A )
+    {
+        // Reserved for future team 1 display actions
+    }
+    else if( event->key() == Qt::Key_D )
+    {
+        // Reserved for future team 1 display actions
+    }
+    else if( event->key() == Qt::Key_W )
+    {
+        // Reserved for future team 1 display actions
+    }
+    else if( event->key() == Qt::Key_S )
+    {
+        // Reserved for future team 1 display actions
+    }
+    else if( event->key() == Qt::Key_J )
+    {
+        // Reserved for future team 2 display actions
+    }
         else if( event->key() == Qt::Key_1 )
         {
-            qDebug()<<"2: Presionaste el numeral "<<event->text();
-            QPixmap mypix0 (":images/images/balon.png");
+            // Set ball possession to Team 1 on scoreboard
+            QPixmap mypix0 (":/images/images/balon.png");
             ui->pos1->setPixmap(mypix0);
-            QPixmap mypix1 (":images/images/balon-gray.png");
+            QPixmap mypix1 (":/images/images/balon-gray.png");
             ui->pos2->setPixmap(mypix1);
-
-
         }
         else if( event->key() == Qt::Key_2 )
         {
-            qDebug()<<"2: Presionaste el numeral "<<event->text();
+            // Set ball possession to Team 2 on scoreboard
             QPixmap mypix0 (":/images/images/balon-gray.png");
             ui->pos1->setPixmap(mypix0);
             QPixmap mypix1 (":/images/images/balon.png");
             ui->pos2->setPixmap(mypix1);
         }
-        else if( event->key() == Qt::Key_P )
-        {
-            qDebug()<<"2: Presionaste la tecla "<<event->text();
-        }
         else
         {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            // Pass unhandled keys to parent
+            QMainWindow::keyPressEvent(event);
         }
     }
 int BoardW::updatePuntos(int PUNTAJE1, int PUNTAJE2)
@@ -193,8 +196,19 @@ int BoardW::updateBonus(int TEAM)
     case 0:
         ui->bonus1->setPixmap(mypix2);
         ui->bonus2->setPixmap(mypix2);
-
-
     }
     return 0;
+}
+
+void BoardW::applyCurrentTheme()
+{
+    // Apply current theme from ThemeManager
+    ThemeManager::instance()->applyTheme();
+    
+    // Update window title color based on theme
+    if (ThemeManager::instance()->currentTheme() == ThemeManager::Dark) {
+        setWindowTitle("Open ScoreBoard - Dark Mode");
+    } else {
+        setWindowTitle("Open ScoreBoard");
+    }
 }

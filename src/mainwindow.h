@@ -5,8 +5,11 @@
 #include <QFileDialog>
 #include <QResizeEvent>
 #include <QKeyEvent>
-#include <QSound>
+#include <QSoundEffect>
+#include <QMenu>
+#include <QMenuBar>
 #include "boardw.h"
+#include "thememanager.h"
 
 
 namespace Ui {
@@ -21,9 +24,11 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
     QTimer* timer;
-    QTime* TIME;
+    int timeMinutes;
+    int timeSeconds; 
     QTime*  timeValue;
     BoardW* scoreBoard;
+    QSoundEffect* buzzerSound;
     int STATUS;
     QString IMG0;
     QString IMG1;
@@ -49,6 +54,11 @@ public slots:
     int Faltas();
     int Periodo();
     int Bonus(int TEAM);
+    
+protected slots:
+    void onThemeChanged();
+    void showThemeMenu();
+    void setupThemeMenu();
 private:
     Ui::MainWindow *ui;
 };

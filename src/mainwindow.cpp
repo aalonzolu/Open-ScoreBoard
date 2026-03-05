@@ -4,59 +4,74 @@
 #include <QTime>
 #include <QDebug>
 #include <QPushButton>
+#include <QUrl>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    scoreBoard = new BoardW();
-    connect(ui->showButton,SIGNAL(clicked()),this,SLOT(showScoreboard()));
-    connect(ui->actionSalir,SIGNAL(triggered()),this,SLOT(close()));
-    connect(ui->timerPlay,SIGNAL(clicked()),this,SLOT(startTimer()));
-    connect(ui->timerPause,SIGNAL(clicked()),this,SLOT(pauseTimer()));
-    connect(ui->timerStop,SIGNAL(clicked()),this,SLOT(stopTimer()));
-    connect(ui->timerRestart,SIGNAL(clicked()),this,SLOT(resetTimer()));
-    connect(ui->LOGO1BUTTON,SIGNAL(clicked()),this,SLOT(setPixmap1()));
-    connect(ui->LOGO2BUTTON,SIGNAL(clicked()),this,SLOT(setPixmap2()));
+    scoreBoard = new BoardW(this);  // Set parent for proper cleanup
+    
+    // Initialize buzzer sound
+    buzzerSound = new QSoundEffect(this);
+    buzzerSound->setSource(QUrl("qrc:/sounds/sounds/Brazzer.wav"));
+    
+    // Initialize theme system
+    ThemeManager::instance()->applyTheme();
+    connect(ThemeManager::instance(), &ThemeManager::themeChanged, 
+            this, &MainWindow::onThemeChanged);
+    
+    // Create theme menu
+    setupThemeMenu();
+    
+    connect(ui->showButton, &QPushButton::clicked, this, &MainWindow::showScoreboard);
+    connect(ui->actionSalir, &QAction::triggered, this, &MainWindow::close);
+    connect(ui->timerPlay, &QPushButton::clicked, this, &MainWindow::startTimer);
+    connect(ui->timerPause, &QPushButton::clicked, this, &MainWindow::pauseTimer);
+    connect(ui->timerStop, &QPushButton::clicked, this, &MainWindow::stopTimer);
+    connect(ui->timerRestart, &QPushButton::clicked, this, &MainWindow::resetTimer);
+    connect(ui->LOGO1BUTTON, &QPushButton::clicked, this, &MainWindow::setPixmap1);
+    connect(ui->LOGO2BUTTON, &QPushButton::clicked, this, &MainWindow::setPixmap2);
 
-    connect(ui->TitleListoButton,SIGNAL(clicked()),this,SLOT(DisableTitle()));
+    connect(ui->TitleListoButton, &QPushButton::clicked, this, &MainWindow::DisableTitle);
 
-    connect(ui->TITLE,SIGNAL(textEdited(QString)),this,SLOT(changename()));
-    connect(ui->homeName,SIGNAL(textEdited(QString)),this,SLOT(teamname()));
-    connect(ui->guestName,SIGNAL(textEdited(QString)),this,SLOT(teamname()));
+    connect(ui->TITLE, &QLineEdit::textEdited, this, &MainWindow::changename);
+    connect(ui->homeName, &QLineEdit::textEdited, this, &MainWindow::teamname);
+    connect(ui->guestName, &QLineEdit::textEdited, this, &MainWindow::teamname);
 
-    connect(ui->puntos1mas1,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos1mas2,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos1mas3,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos1menos1,SIGNAL(clicked()),this,SLOT(Punteo()));
+    connect(ui->puntos1mas1, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos1mas2, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos1mas3, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos1menos1, &QPushButton::clicked, this, &MainWindow::Punteo);
 
-    connect(ui->puntos2mas1,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos2mas2,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos2mas3,SIGNAL(clicked()),this,SLOT(Punteo()));
-    connect(ui->puntos2menos1,SIGNAL(clicked()),this,SLOT(Punteo()));
+    connect(ui->puntos2mas1, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos2mas2, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos2mas3, &QPushButton::clicked, this, &MainWindow::Punteo);
+    connect(ui->puntos2menos1, &QPushButton::clicked, this, &MainWindow::Punteo);
 
-    connect(ui->FALTA1mas,SIGNAL(clicked()),this,SLOT(Faltas()));
-    connect(ui->FALTA1menos,SIGNAL(clicked()),this,SLOT(Faltas()));
-    connect(ui->FALTA2mas,SIGNAL(clicked()),this,SLOT(Faltas()));
-    connect(ui->FALTA2menos,SIGNAL(clicked()),this,SLOT(Faltas()));
+    connect(ui->FALTA1mas, &QPushButton::clicked, this, &MainWindow::Faltas);
+    connect(ui->FALTA1menos, &QPushButton::clicked, this, &MainWindow::Faltas);
+    connect(ui->FALTA2mas, &QPushButton::clicked, this, &MainWindow::Faltas);
+    connect(ui->FALTA2menos, &QPushButton::clicked, this, &MainWindow::Faltas);
 
-    connect(ui->Periodomas,SIGNAL(clicked()),this,SLOT(Periodo()));
-    connect(ui->Periodomenos,SIGNAL(clicked()),this,SLOT(Periodo()));
+    connect(ui->Periodomas, &QPushButton::clicked, this, &MainWindow::Periodo);
+    connect(ui->Periodomenos, &QPushButton::clicked, this, &MainWindow::Periodo);
 
     QTimer *timer = new QTimer(this);
-    connect(timer, SIGNAL(timeout()), this, SLOT(countdown()));
+    connect(timer, &QTimer::timeout, this, &MainWindow::countdown);
     timer->start(1000);
 
-    TIME = new QTime();
-    TIME->start();
-    TIME->setHMS(ui->timeEdit->time().hour(), ui->timeEdit->time().minute(), ui->timeEdit->time().second());
+    // Inicializar cronómetro con valores del time edit
+    timeMinutes = ui->timeEdit->time().minute();
+    timeSeconds = ui->timeEdit->time().second();
 
     PUNTOS1 =0;PUNTOS2 =0;FALTAS1 =0;FALTAS2 =0;BONUS =0;POS =0;PERIODO =0;
 }
 
 MainWindow::~MainWindow()
 {
+    delete scoreBoard;
     delete ui;
 }
 
@@ -69,19 +84,28 @@ int MainWindow::countdown()
 {
     if(STATUS==1)
     {
-        if (TIME->minute() <=0 && TIME->second() <=0)
+        if (timeMinutes <= 0 && timeSeconds <= 0)
         {
-            qDebug()<<"Suena la chicharra!";
-            //   :/sounds/sounds/Brazzer.wav
-            QSound::play(":/sounds/sounds/Brazzer.wav");
+            // Game time expired - play buzzer sound
+            buzzerSound->play();
             stopTimer();
             return 0;
         }
-            TIME->setHMS(0,TIME->addSecs(-1).minute(),TIME->addSecs(-1).second());
-            qDebug()<<TIME->toString();
-            ui->lcdTimerMM->display(this->TIME->minute());
-            ui->lcdTimerSS->display(this->TIME->second());
-            scoreBoard->setLCD(this->TIME->minute(),this->TIME->second());
+        // Decrementar tiempo
+        timeSeconds--;
+        if (timeSeconds < 0) {
+            timeSeconds = 59;
+            timeMinutes--;
+        }
+        if (timeMinutes < 0) {
+            timeMinutes = 0;
+            timeSeconds = 0;
+        }
+        
+        // Update timer displays
+        ui->lcdTimerMM->display(timeMinutes);
+        ui->lcdTimerSS->display(timeSeconds);
+        scoreBoard->setLCD(timeMinutes, timeSeconds);
     }
     else if (STATUS==2)
     {
@@ -125,11 +149,12 @@ void MainWindow::startTimer()
     scoreBoard->updateFaltas(FALTAS1,FALTAS2);
     if(STATUS!=2)
     {
-        TIME->setHMS(ui->timeEdit->time().hour(), ui->timeEdit->time().minute(), ui->timeEdit->time().second());
+        timeMinutes = ui->timeEdit->time().minute();
+        timeSeconds = ui->timeEdit->time().second();
     }
     STATUS = 1;
     scoreBoard->STATUS = 1;
-    qDebug()<<"Timer started";
+    // Timer is now running
 
 }
 void MainWindow::pauseTimer()
@@ -144,7 +169,8 @@ void MainWindow::stopTimer()
     //stop the timer and set display to 0 minuts and 0 seconds.
     STATUS = 0;
     scoreBoard->STATUS = 0;
-    TIME->setHMS(ui->timeEdit->time().hour(), ui->timeEdit->time().minute(), ui->timeEdit->time().second());
+    timeMinutes = ui->timeEdit->time().minute();
+    timeSeconds = ui->timeEdit->time().second();
     ui->lcdTimerMM->display(00);
     ui->lcdTimerSS->display(00);
     scoreBoard->setLCD(0,0);
@@ -154,7 +180,8 @@ void MainWindow::resetTimer()
 {
     //reset the time countdown
     STATUS = 1;
-    TIME->setHMS(ui->timeEdit->time().hour(), ui->timeEdit->time().minute(), ui->timeEdit->time().second());
+    timeMinutes = ui->timeEdit->time().minute();
+    timeSeconds = ui->timeEdit->time().second();
     ui->lcdTimerMM->display(00);
     ui->lcdTimerSS->display(00);
     scoreBoard->setLCD(0,0);
@@ -183,11 +210,12 @@ void MainWindow::setPixmap2()
     ui->LOGO2->setPixmap(mypix.scaled(w,h,Qt::KeepAspectRatio));
     scoreBoard->SetPixmap(2,IMG1);
 }
+
 void MainWindow::resizeEvent(QResizeEvent* event)
 {
    QMainWindow::resizeEvent(event);
-   // Your code here.
-   qDebug()<<"Tamanho";
+   
+   // Update logo displays after resize
    int w = ui->LOGO1->width();
    int h = ui->LOGO1->height();
    QPixmap mypix0 (IMG0);
@@ -210,140 +238,120 @@ void MainWindow::teamname()
     scoreBoard->teamname(team1,team2);
 }
 
-//void MainWindow::Score()
-//{
-//    //Chage the score
-//}
-
 void MainWindow::keyPressEvent(QKeyEvent *event)
-
 {
-
-        if( event->key() == Qt::Key_A )
-        {
-
-            qDebug()<<"Presionaste la tecla A";
+    // Handle keyboard shortcuts for game control
+    switch(event->key()) {
+        case Qt::Key_A:
+            // Team 1: Decrease fouls
             FALTAS1--;
             ui->faltas1->display(FALTAS1);
             scoreBoard->updateFaltas(FALTAS1,FALTAS2);
-        }
-        else if( event->key() == Qt::Key_D )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_D:
+            // Team 1: Increase fouls
             FALTAS1++;
             ui->faltas1->display(FALTAS1);
             scoreBoard->updateFaltas(FALTAS1,FALTAS2);
-            if (FALTAS1==4)
-            {
+            if (FALTAS1==4) {
                 Bonus(1);
             }
-        }
-        else if( event->key() == Qt::Key_W )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_W:
+            // Team 1: Increase score
             PUNTOS1++;
             ui->puntos1->display(PUNTOS1);
             scoreBoard->updatePuntos(PUNTOS1,PUNTOS2);
-
-        }
-        else if( event->key() == Qt::Key_S )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_S:
+            // Team 1: Decrease score
             PUNTOS1--;
             ui->puntos1->display(PUNTOS1);
             scoreBoard->updatePuntos(PUNTOS1,PUNTOS2);
-
-        }
-        else if( event->key() == Qt::Key_J )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+        case Qt::Key_J:
+            // Team 2: Decrease fouls
             FALTAS2--;
             ui->faltas2->display(FALTAS2);
             scoreBoard->updateFaltas(FALTAS1,FALTAS2);
-
-        }
-        else if( event->key() == Qt::Key_L )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_L:
+            // Team 2: Increase fouls
             FALTAS2++;
             ui->faltas2->display(FALTAS2);
             scoreBoard->updateFaltas(FALTAS1,FALTAS2);
-            if (FALTAS2==4)
-            {
+            if (FALTAS2==4) {
                 Bonus(2);
             }
-
-        }
-        else if( event->key() == Qt::Key_I )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_I:
+            // Team 2: Increase score
             PUNTOS2++;
             ui->puntos2->display(PUNTOS2);
             scoreBoard->updatePuntos(PUNTOS1,PUNTOS2);
-
-        }
-        else if( event->key() == Qt::Key_K )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_K:
+            // Team 2: Decrease score
             PUNTOS2--;
             ui->puntos2->display(PUNTOS2);
             scoreBoard->updatePuntos(PUNTOS1,PUNTOS2);
-
-        }
-        else if( event->key() == Qt::Key_1 )
-        {
-            qDebug()<<"Presionaste el numeral "<<event->text();
-            QPixmap mypix0 (":images/images/balon.png");
+            break;
+        case Qt::Key_1:
+            // Set ball possession to Team 1
+            {
+            QPixmap mypix0 (":/images/images/balon.png");
             ui->pos1->setPixmap(mypix0);
-            QPixmap mypix1 (":images/images/balon-gray.png");
+            QPixmap mypix1 (":/images/images/balon-gray.png");
             ui->pos2->setPixmap(mypix1);
             scoreBoard->balonPOS(1);
-
-        }
-        else if( event->key() == Qt::Key_2 )
-        {
-            qDebug()<<"Presionaste el numeral "<<event->text();
+            }
+            break;
+            
+        case Qt::Key_2:
+            // Set ball possession to Team 2
+            {
             QPixmap mypix0 (":/images/images/balon-gray.png");
             ui->pos1->setPixmap(mypix0);
             QPixmap mypix1 (":/images/images/balon.png");
             ui->pos2->setPixmap(mypix1);
             scoreBoard->balonPOS(2);
-
-        }
-        else if( event->key() == Qt::Key_P )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
-            if(STATUS==1)
-            {
-                pauseTimer();
             }
-            else
-            {
+            break;
+        case Qt::Key_P:
+            // Toggle play/pause timer
+            if(STATUS==1) {
+                pauseTimer();
+            } else {
                 startTimer();
             }
-
-        }
-        else if( event->key() == Qt::Key_9 )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_9:
+            // Decrease period
             PERIODO--;
             ui->PERIODO->display(PERIODO);
             scoreBoard->updatePeriodo(PERIODO);
-
-        }
-        else if( event->key() == Qt::Key_0 )
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
+            break;
+            
+        case Qt::Key_0:
+            // Increase period
             PERIODO++;
             ui->PERIODO->display(PERIODO);
             scoreBoard->updatePeriodo(PERIODO);
-
-        }
-        else
-        {
-            qDebug()<<"Presionaste la tecla "<<event->text();
-        }
+            break;
+            
+        default:
+            // Unhandled key - pass to parent
+            QMainWindow::keyPressEvent(event);
+            break;
     }
+}
 void MainWindow::DisableTitle()
 {
     //disable the title
@@ -356,9 +364,9 @@ int MainWindow::getStatus()
 }
 int MainWindow::Punteo()
 {
-    // set punteo
+    // Set punteo - handle scoring button clicks
     QObject *button = sender();
-    qDebug()<<button->objectName();
+    
     if(button->objectName()=="puntos1mas1")
     {
         PUNTOS1++;
@@ -479,5 +487,37 @@ int MainWindow::Bonus(int TEAM)
 
     }
     return 0;
+}
 
+void MainWindow::setupThemeMenu()
+{
+    // Create theme menu in menu bar
+    QMenu *themeMenu = menuBar()->addMenu("&Theme");
+    
+    QAction *lightAction = themeMenu->addAction("Light Theme");
+    QAction *darkAction = themeMenu->addAction("Dark Theme");
+    QAction *autoAction = themeMenu->addAction("Auto Theme");
+    
+    connect(lightAction, &QAction::triggered, [this]() {
+        ThemeManager::instance()->setTheme(ThemeManager::Light);
+    });
+    
+    connect(darkAction, &QAction::triggered, [this]() {
+        ThemeManager::instance()->setTheme(ThemeManager::Dark);
+    });
+    
+    connect(autoAction, &QAction::triggered, [this]() {
+        ThemeManager::instance()->setTheme(ThemeManager::Auto);
+    });
+}
+
+void MainWindow::onThemeChanged()
+{
+    // Handle theme changes - refresh UI elements if needed
+    ThemeManager::instance()->applyTheme();
+}
+
+void MainWindow::showThemeMenu()
+{
+    // Reserved slot for showing theme menu
 }

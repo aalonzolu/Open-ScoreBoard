@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Open ScoreBoard
+GenericName=Basketball Scoreboard
+Comment=Basketball scoring application for live games
+Icon=balon
+Exec=Open-ScoreBoard
+Terminal=false
+StartupNotify=true
+Categories=Game;Sports;Utility;
+Keywords=basketball;score;scoreboard;sports;game;
+MimeType=application/x-scoreboard;
+
+[Desktop Action NewGame]
+Name=New Game
+Exec=Open-ScoreBoard --new-game
+
+[Desktop Action Fullscreen]  
+Name=Show Scoreboard
+Exec=Open-ScoreBoard --fullscreen

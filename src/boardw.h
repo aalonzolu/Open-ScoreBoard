@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QString>
 #include <QResizeEvent>
+#include "thememanager.h"
 
 namespace Ui {
 class BoardW;
@@ -34,6 +35,7 @@ public slots:
     int updateFaltas(int FaLTAS1, int FaLTAS2);
     int updatePeriodo(int PERIODOT);
     int updateBonus(int TEAM);
+    void applyCurrentTheme();
 private:
     Ui::BoardW *ui;
 };
